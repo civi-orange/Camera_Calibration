@@ -181,7 +181,7 @@ class ImageTrans:
 
         return result_yx, src_yx, mask
 
-    def get_FOV_rect(self, src_size, dst_size):
+    def get_FOV_rect(self, src_size, dst_size=(1080, 1920)):
         h_dst, w_dst = dst_size
         h_src, w_src = src_size
         region = np.full(src_size, 255)
@@ -255,8 +255,8 @@ class ImageTrans:
         out[(result_yx[:, 1], result_yx[:, 0])] = frame[(src_yx[:, 1], src_yx[:, 0])]
         out_image = out[:h, :w]
         # cv2.imshow("out_image", out_image)
-        keral = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        out_image = cv2.morphologyEx(out_image, cv2.MORPH_CLOSE, keral)
+        # keral = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        # out_image = cv2.morphologyEx(out_image, cv2.MORPH_CLOSE, keral)
         # out_image = maxblur(out_image, 1)  # 自定义滤波
 
         FPGA = False
@@ -347,7 +347,7 @@ class ImageTrans:
 
         new_G12[0:1, :] = new_G12[0:1, :] * rate[0]
         new_G12[1:2, :] = new_G12[1:2, :] * rate[1]
-        new_G12[:, 3:] = new_G12[:, 3:] / 3000
+        new_G12[:, 3:] = new_G12[:, 3:] / self.depth
         rrr_yx = np.argwhere(region)
         rrr_xy = rrr_yx[:, [1, 0]]
         rrr_xy1 = np.concatenate((rrr_xy, np.ones((rrr_xy.shape[0], 1))), axis=1)
@@ -365,9 +365,16 @@ class ImageTrans:
         ar_xy = ar_yx[:, [1, 0]]
         ar_xy1 = np.concatenate((ar_xy, np.ones((ar_xy.shape[0], 1))), axis=1)
         out_xy1 = newkg.dot(ar_xy1.T)
-        out_xy1 = myround(out_xy1).astype(np.int32)
-        ar_image[ar_xy[:, 1], ar_xy[:, 0]] = frame[out_xy1[1, :], out_xy1[0, :]]
-        ar_image = ar_image.astype("uint8")
+
+        # 四周取整插值法
+        liner_frame = np.full((rect_h, rect_w), 255)
+        out_xy_xy1_xyf = Liner_round(out_xy1)
+        liner_frame = Liner_idw(frame, liner_frame, out_xy_xy1_xyf)
+
+        # 取整法
+        # out_xy1 = myround(out_xy1).astype(np.int32)
+        # ar_image[ar_xy[:, 1], ar_xy[:, 0]] = frame[out_xy1[1, :], out_xy1[0, :]]
+        # ar_image = ar_image.astype("uint8")
 
         # file = open("./m_g_inv_map.txt", "w")
         # for i in range(len(self.K1)):
@@ -381,44 +388,50 @@ class ImageTrans:
         # for i in range(len(file_xy)):
         #     file.write(str(file_xy[i]) + '\n')
         # file.close()
-        return ar_image
+        return liner_frame
+
+
+import imageio
+io_writer = imageio.get_writer("../output/idw.mp4", fps=24)
 
 
 def main():
-    XT = ImageTrans(K_red, G, depth=5000)
-    cap = cv2.VideoCapture(0)
+    XT = ImageTrans(K_red, G, depth=4000)
+    # cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture("../output/src.mp4")
     # import imageio
     # video_writer = imageio.get_writer("../output/inv_out.mp4", fps=24)
     zd = ZDmethod()
     while True:
-        _, frame = cap.read()
+        ret, frame = cap.read()
         src = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # src = cv2.imread(r"..\img\20220614_15_11_09_476.jpg", cv2.IMREAD_GRAYSCALE)
+        # src = cv2.imread(r"..\1.jpg", cv2.IMREAD_GRAYSCALE)
         cv2.imshow("src", src)
-
+        cv2.waitKey(1)
         rect = XT.get_FOV_rect((src.shape[0], src.shape[1]), (1080, 1920))
         print(rect)
 
-        out = XT.image_trans(src, rect)
-        out = zd.detect(out)
-        out = gray2rgb_greenFrame(out)
+        # out = XT.image_trans(src, rect)
+        # out = zd.detect(out)
+        # out = gray2rgb_greenFrame(out)
+        # out = cv2.resize(out, (1920, 1080), interpolation=cv2.INTER_LINEAR)
+        # cv2.imshow("out", out)
 
-        out = cv2.resize(out, (1920, 1080), interpolation=cv2.INTER_LINEAR)
-        cv2.imshow("out", out)
+        inv_out = XT.image_trans_inv(src, rect)
 
-        # inv_out = XT.image_trans_inv(src, rect)
-        # inv_out = zd.detect(inv_out)
-        # inv_out = gray2rgb_greenFrame(inv_out)
-        # inv_out = cv2.resize(inv_out, (1920, 1080), interpolation=cv2.INTER_LINEAR)
-        # cv2.imshow("inv_out", inv_out)
-
+        inv_out = zd.detect(inv_out)
+        inv_out = gray2rgb_greenFrame(inv_out)
+        inv_out = cv2.resize(inv_out, (1920, 1080), interpolation=cv2.INTER_LINEAR)
+        cv2.imshow("inv_out", inv_out)
+        io_writer.append_data(inv_out)
         # cv2.namedWindow('okkk', cv2.WND_PROP_FULLSCREEN)
         # cv2.setWindowProperty("okkk", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # cv2.moveWindow("okkk", int(2560), 0)
-        # cv2.imshow("okkk", out)
+        # cv2.imshow("okkk", inv_out)
 
         k = cv2.waitKey(10)
         if k == 27:
+            io_writer.close()
             exit()
 
 

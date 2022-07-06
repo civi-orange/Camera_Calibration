@@ -86,7 +86,53 @@ def myround(matrix: np.array):
     ban = out - int_out
     mask = np.where(ban >= 0.5)
     int_out[mask] = int_out[mask] + 1
+
+    src = matrix.copy()
+    int_src = src.astype(np.int32)
+    int_src_1 = src + 1
+
     return int_out
+
+
+def Liner_round(matrix: np.array):
+    """
+    f(P) = (1−u)(1−v)f(i,j) + u(1−v)f(i+1,j) + (1−u)vf(i,j+1) + uvf(i+1,j+1)
+    :param matrix:
+    :return:
+    """
+    src = matrix.copy()
+
+    int_src = src.astype(np.int32)
+    float_src = src - int_src
+    # temp.shape =  (h*w, 1, 4, 4)
+    temp = np.array([
+        [int_src[0:1, :], int_src[1:2, :], (1 - float_src[0:1, :]) * (1 - float_src[1:2, :])],
+        [int_src[0:1, :], int_src[1:2, :] + 1, (1 - float_src[0:1, :]) * float_src[1:2, :]],
+        [int_src[0:1, :] + 1, int_src[1:2, :], float_src[0:1, :] * (1 - float_src[1:2, :])],
+        [int_src[0:1, :] + 1, int_src[1:2, :] + 1, float_src[0:1, :] * float_src[1:2, :]]
+    ]).T
+    return temp
+
+
+def Liner_idw(frame_in: np.array, frame_out: np.array, matrix: np.array):
+    """
+    距离插值, 与上一个函数Liner_round使用作为一种单应性变化插值
+    :param frame_in
+    :param frame_out
+    :param matrix: 维度为(h,w,3)矩阵 3: int(src), int(src)+1, src-int(src)
+    :return:
+    """
+
+    h, w = frame_out.shape[:2]
+    for i in range(h):
+        for j in range(w):
+            y = matrix[i*w+j, 0, :, :]
+            frame_out[i, j] = frame_in[int(y[1, 0]), int(y[0, 0])] * y[2, 0] + \
+                              frame_in[int(y[1, 1]), int(y[0, 1])] * y[2, 1] + \
+                              frame_in[int(y[1, 2]), int(y[0, 2])] * y[2, 2] + \
+                              frame_in[int(y[1, 3]), int(y[0, 3])] * y[2, 3]
+
+    return frame_out.astype("uint8")
 
 
 # findcircle

@@ -25,10 +25,11 @@ point_press = []
 def mouse(event, x, y, flag, param):
     frame = param[0]
     path = param[1]
+    depth = param[2]
     global num
     if event == cv2.EVENT_LBUTTONDOWN:
         print("------")
-        xy = "%d %d" % (x, y)
+        xy = "%d %d %d" % (x, y, depth)
         point_press.append(xy)
         print(xy)
         num += 1
@@ -37,7 +38,7 @@ def mouse(event, x, y, flag, param):
         cv2.imwrite(path + "{:0=8}.jpg".format(num), frame)
         assert len(cicle_center) != 0
         for i in range(len(cicle_center)):
-            c_xy = "%d %d" % (cicle_center[0][0], cicle_center[0][1])
+            c_xy = "%d %d %d" % (cicle_center[0][0], cicle_center[0][1], depth)
             point_circle.append(c_xy)
             print(c_xy)
 
@@ -75,7 +76,7 @@ def main():
 
     cap = cv2.VideoCapture(0)
     #  重要的深度设计
-    depth = 3000  # 请输入数据采集深度
+    depth = 5000  # 请输入数据采集深度
 
     now_path = "../image_calib/image_{}/".format(depth)
     if not os.path.exists(now_path):
@@ -85,11 +86,11 @@ def main():
         rt, frame = cap.read()
         assert rt is True, "find no camera !"
         cv2.imshow("camera", frame)
-        # cv2.namedWindow('binary_left', cv2.WND_PROP_FULLSCREEN)
-        # cv2.setWindowProperty("binary_left", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        # cv2.moveWindow("binary_left", 2560, 0)
+        cv2.namedWindow('binary_left', cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("binary_left", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.moveWindow("binary_left", 2560, 0)
         cv2.imshow("binary_left", temp_frame)
-        cv2.setMouseCallback("binary_left", mouse, [frame, now_path])
+        cv2.setMouseCallback("binary_left", mouse, [frame, now_path, depth])
         key = cv2.waitKey(30)
 
         if key == 27:
